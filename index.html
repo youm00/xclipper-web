@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XClipper History</title>
+<style>
+  :root {
+    --bg:       #0f1117;
+    --surface:  #1a1d27;
+    --border:   #2a2d3a;
+    --indigo:   #4F5BE7;
+    --indigo2:  #3345C7;
+    --text:     #e8eaf0;
+    --muted:    #6b7280;
+    --pc:       #5b9cf6;
+    --tablet:   #4ade80;
+    --mobile:   #fb923c;
+    --radius:   10px;
+    --font:     'Inter', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo {
+    width: 32px; height: 32px;
+    background: var(--indigo);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; flex-shrink: 0;
+  }
+  header h1 { font-size: 16px; font-weight: 600; letter-spacing: -0.3px; }
+  header .spacer { flex: 1; }
+  .theme-btn {
+    background: none; border: 1px solid var(--border);
+    color: var(--muted); border-radius: 6px;
+    padding: 6px 10px; cursor: pointer; font-size: 13px;
+    transition: border-color .2s, color .2s;
+  }
+  .theme-btn:hover { border-color: var(--indigo); color: var(--text); }
+
+  /* ── Controls ── */
+  .controls {
+    padding: 14px 20px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+  }
+  select, input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    font-size: 13px;
+    font-family: var(--font);
+    outline: none;
+    transition: border-color .2s;
+  }
+  select:focus, input:focus { border-color: var(--indigo); }
+  select { cursor: pointer; }
+  #fileSelect { min-width: 200px; }
+  #searchInput { flex: 1; min-width: 180px; }
+  #searchInput::placeholder { color: var(--muted); }
+
+  .btn {
+    padding: 8px 14px;
+    border-radius: var(--radius);
+    border: none; cursor: pointer;
+    font-size: 13px; font-family: var(--font);
+    font-weight: 500;
+    transition: opacity .15s;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .btn:hover { opacity: .85; }
+  .btn-primary { background: var(--indigo); color: #fff; }
+  .btn-ghost { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+
+  /* ── Stats bar ── */
+  .stats {
+    padding: 8px 20px;
+    font-size: 12px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    display: flex; gap: 16px; align-items: center;
+  }
+  .device-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; }
+
+  /* ── List ── */
+  #clipList { padding: 8px 20px 80px; }
+
+  .clip-item {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 6px;
+    background: var(--surface);
+    transition: border-color .15s;
+    overflow: hidden;
+  }
+  .clip-item:hover { border-color: #3a3d50; }
+
+  .clip-header {
+    display: flex; align-items: center;
+    padding: 8px 12px;
+    gap: 10px;
+    cursor: pointer;
+  }
+  .clip-device {
+    font-size: 11px; font-weight: 600;
+    padding: 2px 7px; border-radius: 4px;
+    flex-shrink: 0;
+  }
+  .device-pc     { color: var(--pc);     background: rgba(91,156,246,.12); }
+  .device-tablet { color: var(--tablet); background: rgba(74,222,128,.12); }
+  .device-mobile { color: var(--mobile); background: rgba(251,146,60,.12); }
+
+  .clip-ts {
+    font-size: 11px; color: var(--muted);
+    flex-shrink: 0;
+  }
+  .clip-preview {
+    flex: 1; font-size: 13px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    color: var(--text);
+  }
+  .copy-btn {
+    background: none; border: none; cursor: pointer;
+    color: var(--muted); font-size: 14px; padding: 4px 6px;
+    border-radius: 5px; flex-shrink: 0;
+    transition: color .15s, background .15s;
+  }
+  .copy-btn:hover { color: var(--text); background: var(--border); }
+
+  .clip-body {
+    display: none;
+    padding: 0 12px 12px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #c8cadc;
+    white-space: pre-wrap;
+    word-break: break-all;
+    border-top: 1px solid var(--border);
+    max-height: 300px;
+    overflow-y: auto;
+  }
+  .clip-item.open .clip-body { display: block; }
+
+  /* ── Pagination ── */
+  .pagination {
+    display: flex; justify-content: center;
+    gap: 6px; padding: 20px;
+    flex-wrap: wrap;
+  }
+  .page-btn {
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); border-radius: 6px;
+    padding: 6px 12px; cursor: pointer; font-size: 13px;
+    transition: border-color .15s, background .15s;
+  }
+  .page-btn:hover, .page-btn.active {
+    border-color: var(--indigo); background: var(--indigo); color: #fff;
+  }
+  .page-btn:disabled { opacity: .4; cursor: default; }
+
+  /* ── Empty / Loading ── */
+  .empty {
+    text-align: center; padding: 60px 20px;
+    color: var(--muted); font-size: 14px;
+  }
+  .spinner {
+    width: 28px; height: 28px;
+    border: 3px solid var(--border);
+    border-top-color: var(--indigo);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    margin: 0 auto 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--indigo); color: #fff;
+    padding: 10px 20px; border-radius: 20px;
+    font-size: 13px; opacity: 0;
+    transition: opacity .2s;
+    pointer-events: none; z-index: 999;
+  }
+  #toast.show { opacity: 1; }
+
+  /* ── Light mode ── */
+  body.light {
+    --bg: #f4f5fa; --surface: #fff; --border: #e0e2ec;
+    --text: #1a1d27; --muted: #6b7280;
+  }
+
+  /* ── CSV modal ── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.6); z-index: 200;
+    align-items: center; justify-content: center;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 24px;
+    width: 90%; max-width: 480px;
+  }
+  .modal h2 { font-size: 15px; margin-bottom: 16px; }
+  .modal textarea {
+    width: 100%; height: 140px; resize: vertical;
+    background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); border-radius: 8px;
+    padding: 10px; font-size: 12px;
+    font-family: 'Courier New', monospace;
+  }
+  .modal-actions { display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end; }
+
+  @media (max-width: 600px) {
+    .controls { padding: 10px 12px; }
+    #clipList  { padding: 8px 12px 80px; }
+    .stats     { padding: 8px 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">📋</div>
+  <h1>XClipper History</h1>
+  <div class="spacer"></div>
+  <button class="theme-btn" onclick="toggleTheme()">☀️ ライト</button>
+</header>
+
+<div class="controls">
+  <select id="fileSelect" onchange="onFileChange()">
+    <option value="">ファイルを選択...</option>
+  </select>
+  <input id="searchInput" type="text" placeholder="🔍 検索..." oninput="onSearch()">
+  <button class="btn btn-ghost" onclick="exportCsv()">⬆ エクスポート</button>
+  <button class="btn btn-ghost" onclick="openImport()">⬇ インポート</button>
+  <button class="btn btn-primary" onclick="loadClips(1)">↻ 更新</button>
+</div>
+
+<div class="stats" id="stats">ファイルを選択してください</div>
+
+<div id="clipList">
+  <div class="empty">
+    <div>XClipper Historyファイルを選択してください</div>
+  </div>
+</div>
+
+<div class="pagination" id="pagination"></div>
+
+<div id="toast">コピーしました</div>
+
+<!-- Import Modal -->
+<div class="modal-overlay" id="importModal">
+  <div class="modal">
+    <h2>⬇ CSVインポート</h2>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">CSVの内容をここに貼り付けてください（日時,デバイス,"内容" の形式）</p>
+    <textarea id="importText" placeholder="2026-04-05 10:00:00,PC,&quot;内容&quot;"></textarea>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeImport()">キャンセル</button>
+      <button class="btn btn-primary" onclick="doImport()">インポート</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── 設定 ──────────────────────────────────
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbz0F0OfYIJbKnfWMkCU4eU0ZUhjm1GAfiWyV9BG27tdBF1yKc_MOMRLa1h8a_9fR80G/exec';
+const LIMIT   = 100;
+
+// ── 状態 ──────────────────────────────────
+let currentFileId = '';
+let currentPage   = 1;
+let currentQuery  = '';
+let searchTimer   = null;
+let allClips      = []; // 現在ページのデータ
+
+// ── 初期化 ────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  loadFiles();
+  // ローカルストレージからテーマ復元
+  if (localStorage.getItem('theme') === 'light') {
+    document.body.classList.add('light');
+    document.querySelector('.theme-btn').textContent = '🌙 ダーク';
+  }
+});
+
+// ── テーマ切替 ────────────────────────────
+function toggleTheme() {
+  const isLight = document.body.classList.toggle('light');
+  const btn = document.querySelector('.theme-btn');
+  btn.textContent = isLight ? '🌙 ダーク' : '☀️ ライト';
+  localStorage.setItem('theme', isLight ? 'light' : 'dark');
+}
+
+// ── ファイル一覧取得 ──────────────────────
+async function loadFiles() {
+  try {
+    const res  = await fetch(`${GAS_URL}?action=getFiles`);
+    const data = await res.json();
+    const sel  = document.getElementById('fileSelect');
+    sel.innerHTML = '<option value="">ファイルを選択...</option>';
+    if (data.files && data.files.length > 0) {
+      data.files.forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f.id;
+        opt.textContent = f.name;
+        sel.appendChild(opt);
+      });
+      // 最新ファイルを自動選択
+      sel.value = data.files[0].id;
+      onFileChange();
+    }
+  } catch (e) {
+    showStats('ファイル一覧の取得に失敗しました: ' + e.message);
+  }
+}
+
+function onFileChange() {
+  currentFileId = document.getElementById('fileSelect').value;
+  currentPage   = 1;
+  currentQuery  = '';
+  document.getElementById('searchInput').value = '';
+  if (currentFileId) loadClips(1);
+}
+
+function onSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    currentQuery = document.getElementById('searchInput').value;
+    loadClips(1);
+  }, 300);
+}
+
+// ── クリップ取得 ──────────────────────────
+async function loadClips(page) {
+  if (!currentFileId) return;
+  currentPage = page;
+
+  showLoading();
+  try {
+    const url = `${GAS_URL}?action=getClips&fileId=${currentFileId}&query=${encodeURIComponent(currentQuery)}&page=${page}&limit=${LIMIT}`;
+    const res  = await fetch(url);
+    const data = await res.json();
+
+    if (data.status !== 'ok') throw new Error(data.message);
+
+    allClips = data.clips;
+    renderClips(data.clips);
+    renderPagination(data.total, page);
+    showStats(`${data.total.toLocaleString()} 件`, data.clips);
+  } catch (e) {
+    document.getElementById('clipList').innerHTML =
+      `<div class="empty">取得に失敗しました: ${e.message}</div>`;
+  }
+}
+
+// ── 描画 ──────────────────────────────────
+function renderClips(clips) {
+  const list = document.getElementById('clipList');
+  if (!clips || clips.length === 0) {
+    list.innerHTML = '<div class="empty">該当する履歴がありません</div>';
+    return;
+  }
+  list.innerHTML = clips.map((c, i) => {
+    const dt     = c.ts ? new Date(c.ts) : null;
+    const tsStr  = dt ? formatDate(dt) : '';
+    const device = c.device || '';
+    const cls    = deviceClass(device);
+    const label  = deviceLabel(device);
+    const prev   = escHtml(c.content.substring(0, 120));
+    const full   = escHtml(c.content);
+    return `
+    <div class="clip-item" id="clip-${i}">
+      <div class="clip-header" onclick="toggleClip(${i})">
+        <span class="clip-device ${cls}">${label}</span>
+        <span class="clip-ts">${tsStr}</span>
+        <span class="clip-preview">${prev}</span>
+        <button class="copy-btn" onclick="copyClip(event,${i})" title="コピー">⧉</button>
+      </div>
+      <div class="clip-body">${full}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderPagination(total, page) {
+  const pages = Math.ceil(total / LIMIT);
+  const pg    = document.getElementById('pagination');
+  if (pages <= 1) { pg.innerHTML = ''; return; }
+
+  let html = '';
+  html += `<button class="page-btn" onclick="loadClips(${page-1})" ${page===1?'disabled':''}>‹ 前</button>`;
+
+  const start = Math.max(1, page - 2);
+  const end   = Math.min(pages, page + 2);
+  if (start > 1) html += `<button class="page-btn" onclick="loadClips(1)">1</button>${start>2?'<span style="color:var(--muted);padding:0 4px">…</span>':''}`;
+  for (let i = start; i <= end; i++) {
+    html += `<button class="page-btn ${i===page?'active':''}" onclick="loadClips(${i})">${i}</button>`;
+  }
+  if (end < pages) html += `${end<pages-1?'<span style="color:var(--muted);padding:0 4px">…</span>':''}<button class="page-btn" onclick="loadClips(${pages})">${pages}</button>`;
+  html += `<button class="page-btn" onclick="loadClips(${page+1})" ${page===pages?'disabled':''}>次 ›</button>`;
+
+  pg.innerHTML = html;
+}
+
+function showStats(msg, clips) {
+  const el = document.getElementById('stats');
+  if (!clips) { el.textContent = msg; return; }
+  const pc     = clips.filter(c => c.device.toLowerCase() === 'pc').length;
+  const tablet = clips.filter(c => c.device.toLowerCase().includes('let02')).length;
+  const mobile = clips.length - pc - tablet;
+  el.innerHTML = `
+    <span>${msg}（このページ）</span>
+    <span class="device-badge"><span class="dot" style="background:var(--pc)"></span>PC: ${pc}</span>
+    <span class="device-badge"><span class="dot" style="background:var(--tablet)"></span>タブレット: ${tablet}</span>
+    <span class="device-badge"><span class="dot" style="background:var(--mobile)"></span>スマホ: ${mobile}</span>`;
+}
+
+function showLoading() {
+  document.getElementById('clipList').innerHTML =
+    '<div class="empty"><div class="spinner"></div>読み込み中...</div>';
+  document.getElementById('stats').textContent = '読み込み中...';
+  document.getElementById('pagination').innerHTML = '';
+}
+
+// ── インタラクション ──────────────────────
+function toggleClip(i) {
+  document.getElementById(`clip-${i}`).classList.toggle('open');
+}
+
+function copyClip(e, i) {
+  e.stopPropagation();
+  const content = allClips[i]?.content || '';
+  navigator.clipboard.writeText(content).then(() => showToast());
+}
+
+function showToast() {
+  const t = document.getElementById('toast');
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1500);
+}
+
+// ── CSV エクスポート ──────────────────────
+function exportCsv() {
+  if (!allClips.length) { alert('データがありません'); return; }
+  const rows = ['日時,デバイス,内容'];
+  allClips.forEach(c => {
+    const dt  = c.ts ? formatDate(new Date(c.ts)) : '';
+    const esc = c.content.replace(/"/g, '""');
+    rows.push(`${dt},${c.device},"${esc}"`);
+  });
+  const blob = new Blob(['\uFEFF' + rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `xclipper_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── CSV インポート ────────────────────────
+function openImport() {
+  document.getElementById('importModal').classList.add('show');
+}
+function closeImport() {
+  document.getElementById('importModal').classList.remove('show');
+  document.getElementById('importText').value = '';
+}
+function doImport() {
+  const text = document.getElementById('importText').value.trim();
+  if (!text) return;
+  const lines = text.split('\n').filter(l => l.trim());
+  let inserted = 0, skipped = 0;
+  // ブラウザ側ではスプレッドシートへの書き込みはできないため、
+  // インポートはダウンロード形式（確認用）として扱う
+  alert(`${lines.length} 行を読み込みました。\nWeb版からスプレッドシートへの書き込みはできません。\nAndroidアプリのCSVインポート機能をご利用ください。`);
+  closeImport();
+}
+
+// ── ユーティリティ ────────────────────────
+function deviceClass(d) {
+  const dl = d.toLowerCase();
+  if (dl === 'pc') return 'device-pc';
+  if (dl.includes('let02')) return 'device-tablet';
+  return 'device-mobile';
+}
+function deviceLabel(d) {
+  const dl = d.toLowerCase();
+  if (dl === 'pc') return 'PC';
+  if (dl.includes('let02')) return 'タブレット';
+  return 'スマホ';
+}
+function formatDate(dt) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${dt.getFullYear()}/${pad(dt.getMonth()+1)}/${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())}`;
+}
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
