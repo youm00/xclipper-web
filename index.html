@@ -97,6 +97,38 @@
   .btn-primary { background: var(--indigo); color: #fff; }
   .btn-ghost { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
 
+  /* ── Device Filter ── */
+  .device-filter {
+    padding: 8px 20px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+  }
+  .filter-btn {
+    padding: 5px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 12px;
+    font-family: var(--font);
+    font-weight: 500;
+    transition: all .15s;
+    white-space: nowrap;
+  }
+  .filter-btn:hover { border-color: var(--indigo); color: var(--text); }
+  .filter-btn.active {
+    color: #fff;
+    border-color: transparent;
+  }
+  .filter-btn.active.all    { background: var(--indigo); }
+  .filter-btn.active.pc     { background: var(--pc); color: #0f1117; }
+  .filter-btn.active.mobile { background: var(--mobile); color: #0f1117; }
+  .filter-btn.active.tablet { background: var(--tablet); color: #0f1117; }
+
   /* ── Stats bar ── */
   .stats {
     padding: 8px 20px;
@@ -104,6 +136,7 @@
     color: var(--muted);
     border-bottom: 1px solid var(--border);
     display: flex; gap: 16px; align-items: center;
+    flex-wrap: wrap;
   }
   .device-badge {
     display: inline-flex; align-items: center; gap: 4px;
@@ -218,6 +251,9 @@
     --bg: #f4f5fa; --surface: #fff; --border: #e0e2ec;
     --text: #1a1d27; --muted: #6b7280;
   }
+  body.light .filter-btn.active.pc     { color: #fff; }
+  body.light .filter-btn.active.mobile { color: #fff; }
+  body.light .filter-btn.active.tablet { color: #fff; }
 
   /* ── CSV modal ── */
   .modal-overlay {
@@ -245,6 +281,7 @@
     .controls { padding: 10px 12px; }
     #clipList  { padding: 8px 12px 80px; }
     .stats     { padding: 8px 12px; }
+    .device-filter { padding: 8px 12px; }
   }
 </style>
 </head>
@@ -263,16 +300,21 @@
   </select>
   <input id="searchInput" type="text" placeholder="🔍 検索..." oninput="onSearch()">
   <button class="btn btn-ghost" onclick="exportCsv()">⬆ エクスポート</button>
-  <button class="btn btn-ghost" onclick="openImport()">⬇ インポート</button>
   <button class="btn btn-primary" onclick="loadClips(1)">↻ 更新</button>
+</div>
+
+<!-- デバイスフィルター -->
+<div class="device-filter">
+  <button class="filter-btn all active" id="filter-all"    onclick="setFilter('all')">全て (<span id="cnt-all">0</span>)</button>
+  <button class="filter-btn pc"         id="filter-pc"     onclick="setFilter('pc')">PC (<span id="cnt-pc">0</span>)</button>
+  <button class="filter-btn mobile"     id="filter-mobile" onclick="setFilter('mobile')">スマホ (<span id="cnt-mobile">0</span>)</button>
+  <button class="filter-btn tablet"     id="filter-tablet" onclick="setFilter('tablet')">タブレット (<span id="cnt-tablet">0</span>)</button>
 </div>
 
 <div class="stats" id="stats">ファイルを選択してください</div>
 
 <div id="clipList">
-  <div class="empty">
-    <div>XClipper Historyファイルを選択してください</div>
-  </div>
+  <div class="empty">XClipper Historyファイルを選択してください</div>
 </div>
 
 <div class="pagination" id="pagination"></div>
@@ -298,16 +340,17 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbz0F0OfYIJbKnfWMkCU4eU0
 const LIMIT   = 100;
 
 // ── 状態 ──────────────────────────────────
-let currentFileId = '';
-let currentPage   = 1;
-let currentQuery  = '';
-let searchTimer   = null;
-let allClips      = []; // 現在ページのデータ
+let currentFileId   = '';
+let currentPage     = 1;
+let currentQuery    = '';
+let currentFilter   = 'all'; // 'all' | 'pc' | 'mobile' | 'tablet'
+let searchTimer     = null;
+let allClips        = []; // 現在ページの全データ
+let filteredClips   = []; // フィルタ後のデータ
 
 // ── 初期化 ────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
   loadFiles();
-  // ローカルストレージからテーマ復元
   if (localStorage.getItem('theme') === 'light') {
     document.body.classList.add('light');
     document.querySelector('.theme-btn').textContent = '🌙 ダーク';
@@ -336,7 +379,6 @@ async function loadFiles() {
         opt.textContent = f.name;
         sel.appendChild(opt);
       });
-      // 最新ファイルを自動選択
       sel.value = data.files[0].id;
       onFileChange();
     }
@@ -349,7 +391,9 @@ function onFileChange() {
   currentFileId = document.getElementById('fileSelect').value;
   currentPage   = 1;
   currentQuery  = '';
+  currentFilter = 'all';
   document.getElementById('searchInput').value = '';
+  updateFilterButtons();
   if (currentFileId) loadClips(1);
 }
 
@@ -357,8 +401,52 @@ function onSearch() {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
     currentQuery = document.getElementById('searchInput').value;
+    currentPage  = 1;
     loadClips(1);
   }, 300);
+}
+
+// ── デバイスフィルター ────────────────────
+function setFilter(type) {
+  currentFilter = type;
+  currentPage   = 1;
+  updateFilterButtons();
+  applyFilter();
+}
+
+function updateFilterButtons() {
+  ['all', 'pc', 'mobile', 'tablet'].forEach(t => {
+    const btn = document.getElementById(`filter-${t}`);
+    btn.classList.toggle('active', t === currentFilter);
+  });
+}
+
+function getDeviceType(device) {
+  const d = device.toLowerCase();
+  if (d === 'pc') return 'pc';
+  if (d.includes('let02')) return 'tablet';
+  return 'mobile';
+}
+
+function applyFilter() {
+  if (currentFilter === 'all') {
+    filteredClips = allClips;
+  } else {
+    filteredClips = allClips.filter(c => getDeviceType(c.device) === currentFilter);
+  }
+
+  // カウント更新
+  const cntAll    = allClips.length;
+  const cntPc     = allClips.filter(c => getDeviceType(c.device) === 'pc').length;
+  const cntMobile = allClips.filter(c => getDeviceType(c.device) === 'mobile').length;
+  const cntTablet = allClips.filter(c => getDeviceType(c.device) === 'tablet').length;
+  document.getElementById('cnt-all').textContent    = cntAll;
+  document.getElementById('cnt-pc').textContent     = cntPc;
+  document.getElementById('cnt-mobile').textContent = cntMobile;
+  document.getElementById('cnt-tablet').textContent = cntTablet;
+
+  renderClips(filteredClips);
+  showStats(`${filteredClips.length.toLocaleString()} 件表示`);
 }
 
 // ── クリップ取得 ──────────────────────────
@@ -375,9 +463,8 @@ async function loadClips(page) {
     if (data.status !== 'ok') throw new Error(data.message);
 
     allClips = data.clips;
-    renderClips(data.clips);
+    applyFilter();
     renderPagination(data.total, page);
-    showStats(`${data.total.toLocaleString()} 件`, data.clips);
   } catch (e) {
     document.getElementById('clipList').innerHTML =
       `<div class="empty">取得に失敗しました: ${e.message}</div>`;
@@ -392,13 +479,13 @@ function renderClips(clips) {
     return;
   }
   list.innerHTML = clips.map((c, i) => {
-    const dt     = c.ts ? new Date(c.ts) : null;
-    const tsStr  = dt ? formatDate(dt) : '';
+    const dt    = c.ts ? new Date(c.ts) : null;
+    const tsStr = dt ? formatDate(dt) : '';
     const device = c.device || '';
-    const cls    = deviceClass(device);
-    const label  = deviceLabel(device);
-    const prev   = escHtml(c.content.substring(0, 120));
-    const full   = escHtml(c.content);
+    const cls   = deviceClass(device);
+    const label = deviceLabel(device);
+    const prev  = escHtml(c.content.substring(0, 120));
+    const full  = escHtml(c.content);
     return `
     <div class="clip-item" id="clip-${i}">
       <div class="clip-header" onclick="toggleClip(${i})">
@@ -432,17 +519,8 @@ function renderPagination(total, page) {
   pg.innerHTML = html;
 }
 
-function showStats(msg, clips) {
-  const el = document.getElementById('stats');
-  if (!clips) { el.textContent = msg; return; }
-  const pc     = clips.filter(c => c.device.toLowerCase() === 'pc').length;
-  const tablet = clips.filter(c => c.device.toLowerCase().includes('let02')).length;
-  const mobile = clips.length - pc - tablet;
-  el.innerHTML = `
-    <span>${msg}（このページ）</span>
-    <span class="device-badge"><span class="dot" style="background:var(--pc)"></span>PC: ${pc}</span>
-    <span class="device-badge"><span class="dot" style="background:var(--tablet)"></span>タブレット: ${tablet}</span>
-    <span class="device-badge"><span class="dot" style="background:var(--mobile)"></span>スマホ: ${mobile}</span>`;
+function showStats(msg) {
+  document.getElementById('stats').innerHTML = `<span>${msg}（このページ）</span>`;
 }
 
 function showLoading() {
@@ -459,7 +537,7 @@ function toggleClip(i) {
 
 function copyClip(e, i) {
   e.stopPropagation();
-  const content = allClips[i]?.content || '';
+  const content = filteredClips[i]?.content || '';
   navigator.clipboard.writeText(content).then(() => showToast());
 }
 
@@ -471,9 +549,10 @@ function showToast() {
 
 // ── CSV エクスポート ──────────────────────
 function exportCsv() {
-  if (!allClips.length) { alert('データがありません'); return; }
+  const target = filteredClips.length ? filteredClips : allClips;
+  if (!target.length) { alert('データがありません'); return; }
   const rows = ['日時,デバイス,内容'];
-  allClips.forEach(c => {
+  target.forEach(c => {
     const dt  = c.ts ? formatDate(new Date(c.ts)) : '';
     const esc = c.content.replace(/"/g, '""');
     rows.push(`${dt},${c.device},"${esc}"`);
@@ -499,9 +578,6 @@ function doImport() {
   const text = document.getElementById('importText').value.trim();
   if (!text) return;
   const lines = text.split('\n').filter(l => l.trim());
-  let inserted = 0, skipped = 0;
-  // ブラウザ側ではスプレッドシートへの書き込みはできないため、
-  // インポートはダウンロード形式（確認用）として扱う
   alert(`${lines.length} 行を読み込みました。\nWeb版からスプレッドシートへの書き込みはできません。\nAndroidアプリのCSVインポート機能をご利用ください。`);
   closeImport();
 }
