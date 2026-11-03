@@ -130,14 +130,14 @@
   .filter-btn.active.tablet { background: var(--tablet); color: #0f1117; }
 
   /* ── Stats bar ── */
-  .stats {
-    padding: 8px 20px;
-    font-size: 12px;
-    color: var(--muted);
+  .stats-bar {
+    padding: 6px 20px;
     border-bottom: 1px solid var(--border);
     display: flex; gap: 16px; align-items: center;
+    justify-content: space-between;
     flex-wrap: wrap;
   }
+  .stats { font-size: 12px; color: var(--muted); }
   .device-badge {
     display: inline-flex; align-items: center; gap: 4px;
     font-size: 11px;
@@ -224,7 +224,7 @@
   }
   .jump-input { width: 84px; padding: 6px 10px; }
   .page-total { color: var(--muted); font-size: 12px; white-space: nowrap; }
-  #paginationTop { padding: 10px 20px 0; }
+  #paginationTop { padding: 0; justify-content: flex-end; }
 
   /* ── Empty / Loading ── */
   .empty {
@@ -286,9 +286,9 @@
   @media (max-width: 600px) {
     .controls { padding: 10px 12px; }
     #clipList  { padding: 8px 12px 80px; }
-    .stats     { padding: 8px 12px; }
+    .stats-bar { padding: 6px 12px; }
     .device-filter { padding: 8px 12px; }
-    #paginationTop { padding: 10px 12px 0; }
+    #paginationTop { justify-content: center; width: 100%; }
   }
 </style>
 </head>
@@ -323,9 +323,10 @@
   <button class="filter-btn tablet"     id="filter-tablet" onclick="setFilter('tablet')">タブレット (<span id="cnt-tablet">0</span>)</button>
 </div>
 
-<div class="stats" id="stats">ファイルを選択してください</div>
-
-<div class="pagination" id="paginationTop"></div>
+<div class="stats-bar">
+  <div class="stats" id="stats">ファイルを選択してください</div>
+  <div class="pagination" id="paginationTop"></div>
+</div>
 
 <div id="clipList">
   <div class="empty">XClipper Historyファイルを選択してください</div>
