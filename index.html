@@ -338,6 +338,7 @@
 // ── 設定 ──────────────────────────────────
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbz0F0OfYIJbKnfWMkCU4eU0ZUhjm1GAfiWyV9BG27tdBF1yKc_MOMRLa1h8a_9fR80G/exec';
 const LIMIT   = 100;
+const SECRET_KEY = 'xclipper_view_secret'; // localStorage のキー（ソースには secret を書かない）
 
 // ── 状態 ──────────────────────────────────
 let currentFileId   = '';
@@ -347,6 +348,38 @@ let currentFilter   = 'all'; // 'all' | 'pc' | 'mobile' | 'tablet'
 let searchTimer     = null;
 let allClips        = []; // 現在ページの全データ
 let filteredClips   = []; // フィルタ後のデータ
+
+
+// ── GAS 通信（secret 付き） ───────────────
+function getSecret() {
+  let s = localStorage.getItem(SECRET_KEY);
+  if (!s) {
+    s = (prompt('閲覧用シークレットを入力してください') || '').trim();
+    if (s) localStorage.setItem(SECRET_KEY, s);
+  }
+  return s;
+}
+
+async function gasFetch(params) {
+  const u = new URL(GAS_URL);
+  Object.entries(params).forEach(([k, v]) => u.searchParams.set(k, v));
+  const secret = getSecret();
+  if (secret) u.searchParams.set('secret', secret);
+
+  const res  = await fetch(u.toString());
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (_) {
+    throw new Error('JSON以外の応答: ' + text.slice(0, 200));
+  }
+  if (data.status === 'error' && data.message === 'unauthorized') {
+    localStorage.removeItem(SECRET_KEY);
+    throw new Error('認証に失敗しました。ページを再読み込みしてシークレットを入力し直してください');
+  }
+  return data;
+}
 
 // ── 初期化 ────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
@@ -368,8 +401,8 @@ function toggleTheme() {
 // ── ファイル一覧取得 ──────────────────────
 async function loadFiles() {
   try {
-    const res  = await fetch(`${GAS_URL}?action=getFiles`);
-    const data = await res.json();
+    const data = await gasFetch({ action: 'getFiles' });
+    if (data.status !== 'ok') throw new Error(data.message);
     const sel  = document.getElementById('fileSelect');
     sel.innerHTML = '<option value="">ファイルを選択...</option>';
     if (data.files && data.files.length > 0) {
@@ -456,9 +489,13 @@ async function loadClips(page) {
 
   showLoading();
   try {
-    const url = `${GAS_URL}?action=getClips&fileId=${currentFileId}&query=${encodeURIComponent(currentQuery)}&page=${page}&limit=${LIMIT}`;
-    const res  = await fetch(url);
-    const data = await res.json();
+    const data = await gasFetch({
+      action: 'getClips',
+      fileId: currentFileId,
+      query:  currentQuery,
+      page:   page,
+      limit:  LIMIT,
+    });
 
     if (data.status !== 'ok') throw new Error(data.message);
 
