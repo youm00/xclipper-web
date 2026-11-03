@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>XClipper History</title>
+<title>XClipper Viewer</title>
 <style>
   :root {
     --bg:       #0f1117;
@@ -219,6 +219,12 @@
     border-color: var(--indigo); background: var(--indigo); color: #fff;
   }
   .page-btn:disabled { opacity: .4; cursor: default; }
+  .page-jump {
+    display: inline-flex; align-items: center; gap: 6px; margin-left: 8px;
+  }
+  .jump-input { width: 84px; padding: 6px 10px; }
+  .page-total { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  #paginationTop { padding: 10px 20px 0; }
 
   /* ── Empty / Loading ── */
   .empty {
@@ -282,6 +288,7 @@
     #clipList  { padding: 8px 12px 80px; }
     .stats     { padding: 8px 12px; }
     .device-filter { padding: 8px 12px; }
+    #paginationTop { padding: 10px 12px 0; }
   }
 </style>
 </head>
@@ -289,7 +296,7 @@
 
 <header>
   <div class="logo">📋</div>
-  <h1>XClipper History</h1>
+  <h1>XClipper Viewer</h1>
   <div class="spacer"></div>
   <button class="theme-btn" onclick="toggleTheme()">☀️ ライト</button>
 </header>
@@ -299,6 +306,11 @@
     <option value="">ファイルを選択...</option>
   </select>
   <input id="searchInput" type="text" placeholder="🔍 検索..." oninput="onSearch()">
+  <select id="pageSizeSelect" onchange="onPageSizeChange()" title="1ページの表示件数">
+    <option value="100">100件/ページ</option>
+    <option value="200">200件/ページ</option>
+    <option value="500">500件/ページ</option>
+  </select>
   <button class="btn btn-ghost" onclick="exportCsv()">⬆ エクスポート</button>
   <button class="btn btn-primary" onclick="loadClips(1)">↻ 更新</button>
 </div>
@@ -312,6 +324,8 @@
 </div>
 
 <div class="stats" id="stats">ファイルを選択してください</div>
+
+<div class="pagination" id="paginationTop"></div>
 
 <div id="clipList">
   <div class="empty">XClipper Historyファイルを選択してください</div>
@@ -337,7 +351,7 @@
 <script>
 // ── 設定 ──────────────────────────────────
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbz0F0OfYIJbKnfWMkCU4eU0ZUhjm1GAfiWyV9BG27tdBF1yKc_MOMRLa1h8a_9fR80G/exec';
-const LIMIT   = 100;
+const PAGE_SIZES = [100, 200, 500];
 const SECRET_KEY = 'xclipper_view_secret'; // localStorage のキー（ソースには secret を書かない）
 
 // ── 状態 ──────────────────────────────────
@@ -345,6 +359,8 @@ let currentFileId   = '';
 let currentPage     = 1;
 let currentQuery    = '';
 let currentFilter   = 'all'; // 'all' | 'pc' | 'mobile' | 'tablet'
+let limit           = PAGE_SIZES.includes(parseInt(localStorage.getItem('pageSize')))
+                        ? parseInt(localStorage.getItem('pageSize')) : 100; // 1ページの件数
 let searchTimer     = null;
 let allClips        = []; // 現在ページの全データ
 let filteredClips   = []; // フィルタ後のデータ
@@ -383,6 +399,7 @@ async function gasFetch(params) {
 
 // ── 初期化 ────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('pageSizeSelect').value = String(limit);
   loadFiles();
   if (localStorage.getItem('theme') === 'light') {
     document.body.classList.add('light');
@@ -427,6 +444,13 @@ function onFileChange() {
   currentFilter = 'all';
   document.getElementById('searchInput').value = '';
   updateFilterButtons();
+  if (currentFileId) loadClips(1);
+}
+
+function onPageSizeChange() {
+  limit = parseInt(document.getElementById('pageSizeSelect').value, 10);
+  localStorage.setItem('pageSize', String(limit));
+  currentPage = 1;
   if (currentFileId) loadClips(1);
 }
 
@@ -487,6 +511,7 @@ async function loadClips(page) {
   if (!currentFileId) return;
   currentPage = page;
 
+  window.scrollTo({ top: 0 });
   showLoading();
   try {
     const data = await gasFetch({
@@ -494,7 +519,7 @@ async function loadClips(page) {
       fileId: currentFileId,
       query:  currentQuery,
       page:   page,
-      limit:  LIMIT,
+      limit:  limit,
     });
 
     if (data.status !== 'ok') throw new Error(data.message);
@@ -537,9 +562,8 @@ function renderClips(clips) {
 }
 
 function renderPagination(total, page) {
-  const pages = Math.ceil(total / LIMIT);
-  const pg    = document.getElementById('pagination');
-  if (pages <= 1) { pg.innerHTML = ''; return; }
+  const pages = Math.ceil(total / limit);
+  if (pages <= 1) { setPagination(''); return; }
 
   let html = '';
   html += `<button class="page-btn" onclick="loadClips(${page-1})" ${page===1?'disabled':''}>‹ 前</button>`;
@@ -553,7 +577,32 @@ function renderPagination(total, page) {
   if (end < pages) html += `${end<pages-1?'<span style="color:var(--muted);padding:0 4px">…</span>':''}<button class="page-btn" onclick="loadClips(${pages})">${pages}</button>`;
   html += `<button class="page-btn" onclick="loadClips(${page+1})" ${page===pages?'disabled':''}>次 ›</button>`;
 
-  pg.innerHTML = html;
+  // ページ番号を直接指定して移動
+  html += `<span class="page-jump">`
+        + `<input class="jump-input" type="number" inputmode="numeric" min="1" max="${pages}" placeholder="${page}" onkeydown="onJumpKey(event,${pages})">`
+        + `<button class="page-btn" onclick="onJumpClick(this,${pages})">移動</button>`
+        + `<span class="page-total">/ ${pages} ページ</span>`
+        + `</span>`;
+
+  setPagination(html);
+}
+
+// 上下2か所のページ送りに同じ内容を表示する
+function setPagination(html) {
+  document.getElementById('pagination').innerHTML    = html;
+  document.getElementById('paginationTop').innerHTML = html;
+}
+
+function jumpTo(value, pages) {
+  const p = parseInt(value, 10);
+  if (!p) return;
+  loadClips(Math.min(Math.max(p, 1), pages));
+}
+function onJumpKey(e, pages) {
+  if (e.key === 'Enter') jumpTo(e.target.value, pages);
+}
+function onJumpClick(btn, pages) {
+  jumpTo(btn.parentElement.querySelector('.jump-input').value, pages);
 }
 
 function showStats(msg) {
@@ -564,7 +613,7 @@ function showLoading() {
   document.getElementById('clipList').innerHTML =
     '<div class="empty"><div class="spinner"></div>読み込み中...</div>';
   document.getElementById('stats').textContent = '読み込み中...';
-  document.getElementById('pagination').innerHTML = '';
+  setPagination('');
 }
 
 // ── インタラクション ──────────────────────
