@@ -331,7 +331,7 @@
   <div class="logo">📋</div>
   <h1>XClipper Viewer</h1>
   <div class="spacer"></div>
-  <button class="theme-btn" onclick="toggleTheme()">☀️ ライト</button>
+  <button class="theme-btn" onclick="toggleTheme()">🌙 ダーク</button>
 </header>
 
 <div class="controls">
@@ -390,7 +390,7 @@ const SECRET_KEY = 'xclipper_view_secret'; // localStorage のキー（ソース
 
 // テーマ: dark → light → blue → dark …
 const THEMES = ['dark', 'light', 'blue'];
-const THEME_LABELS = {            // 「次に切り替わるテーマ」をボタンに表示
+const THEME_LABELS = {            // ボタンには「現在のテーマ」を表示
   dark:  '🌙 ダーク',
   light: '☀️ ライト',
   blue:  '🌊 ダークブルー',
@@ -454,8 +454,8 @@ function applyTheme(theme) {
   document.body.classList.remove('light', 'blue');
   if (theme === 'light') document.body.classList.add('light');
   if (theme === 'blue')  document.body.classList.add('blue');
-  const next = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
-  document.querySelector('.theme-btn').textContent = THEME_LABELS[next];
+  // ボタンには現在のテーマの絵文字＋名前を表示
+  document.querySelector('.theme-btn').textContent = THEME_LABELS[theme];
 }
 
 function toggleTheme() {
