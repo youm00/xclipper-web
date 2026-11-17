@@ -19,6 +19,9 @@
     --pc:       #5b9cf6;
     --tablet:   #4ade80;
     --mobile:   #fb923c;
+    --on-accent: #fff;        /* アクセント色の上に載せる文字色 */
+    --body-text: #c8cadc;     /* 全文表示の文字色 */
+    --hover-border: #3a3d50;  /* カードのホバー枠線 */
     --radius:   10px;
     --font:     'Inter', 'Hiragino Sans', 'Yu Gothic', sans-serif;
   }
@@ -97,7 +100,7 @@
     display: flex; align-items: center; gap: 6px;
   }
   .btn:hover { opacity: .85; }
-  .btn-primary { background: var(--indigo); color: #fff; }
+  .btn-primary { background: var(--indigo); color: var(--on-accent); }
   .btn-ghost { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
 
   /* ── Device Filter ── */
@@ -127,7 +130,7 @@
     color: #fff;
     border-color: transparent;
   }
-  .filter-btn.active.all    { background: var(--indigo); }
+  .filter-btn.active.all    { background: var(--indigo); color: var(--on-accent); }
   .filter-btn.active.pc     { background: var(--pc); color: #0f1117; }
   .filter-btn.active.mobile { background: var(--mobile); color: #0f1117; }
   .filter-btn.active.tablet { background: var(--tablet); color: #0f1117; }
@@ -158,7 +161,7 @@
     transition: border-color .15s;
     overflow: hidden;
   }
-  .clip-item:hover { border-color: #3a3d50; }
+  .clip-item:hover { border-color: var(--hover-border); }
 
   .clip-header {
     display: flex; align-items: center;
@@ -197,7 +200,7 @@
     padding: 0 12px 12px;
     font-size: 13px;
     line-height: 1.6;
-    color: #c8cadc;
+    color: var(--body-text);
     white-space: pre-wrap;
     word-break: break-all;
     border-top: 1px solid var(--border);
@@ -219,7 +222,7 @@
     transition: border-color .15s, background .15s;
   }
   .page-btn:hover, .page-btn.active {
-    border-color: var(--indigo); background: var(--indigo); color: #fff;
+    border-color: var(--indigo); background: var(--indigo); color: var(--on-accent);
   }
   .page-btn:disabled { opacity: .4; cursor: default; }
   .page-jump {
@@ -247,7 +250,7 @@
   /* ── Toast ── */
   #toast {
     position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-    background: var(--indigo); color: #fff;
+    background: var(--indigo); color: var(--on-accent);
     padding: 10px 20px; border-radius: 20px;
     font-size: 13px; opacity: 0;
     transition: opacity .2s;
@@ -259,10 +262,37 @@
   body.light {
     --bg: #f4f5fa; --surface: #fff; --border: #e0e2ec;
     --text: #1a1d27; --muted: #6b7280;
+    --body-text: #3a3d50; --hover-border: #c4c7d6;
   }
   body.light .filter-btn.active.pc     { color: #fff; }
   body.light .filter-btn.active.mobile { color: #fff; }
   body.light .filter-btn.active.tablet { color: #fff; }
+
+  /* ── Dark blue mode ──
+     bg #1f2d3a / surface #283a4a / border #3b5063 / text #e6edf3
+     muted #7b8d9c / accent #8cc4ff / danger #f08080
+     success #7ed6a0 / warning #f0c878 */
+  body.blue {
+    --bg:       #1f2d3a;
+    --surface:  #283a4a;
+    --border:   #3b5063;
+    --text:     #e6edf3;
+    --muted:    #7b8d9c;
+    --indigo:   #8cc4ff;   /* アクセント */
+    --indigo2:  #6fb1f5;
+    --pc:       #8cc4ff;
+    --tablet:   #7ed6a0;   /* success */
+    --mobile:   #f0c878;   /* warning */
+    --on-accent: #0f1e2b;
+    --body-text: #c9d6e2;
+    --hover-border: #55718a;
+  }
+  body.blue .device-pc     { background: rgba(140,196,255,.14); }
+  body.blue .device-tablet { background: rgba(126,214,160,.14); }
+  body.blue .device-mobile { background: rgba(240,200,120,.14); }
+  body.blue .filter-btn.active.pc,
+  body.blue .filter-btn.active.mobile,
+  body.blue .filter-btn.active.tablet { color: #0f1e2b; }
 
   /* ── CSV modal ── */
   .modal-overlay {
@@ -358,6 +388,14 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbz0F0OfYIJbKnfWMkCU4eU0
 const PAGE_SIZES = [100, 200, 500];
 const SECRET_KEY = 'xclipper_view_secret'; // localStorage のキー（ソースには secret を書かない）
 
+// テーマ: dark → light → blue → dark …
+const THEMES = ['dark', 'light', 'blue'];
+const THEME_LABELS = {            // 「次に切り替わるテーマ」をボタンに表示
+  dark:  '🌙 ダーク',
+  light: '☀️ ライト',
+  blue:  '🌊 ダークブルー',
+};
+
 // ── 状態 ──────────────────────────────────
 let currentFileId   = '';
 let currentPage     = 1;
@@ -368,6 +406,7 @@ let limit           = PAGE_SIZES.includes(parseInt(localStorage.getItem('pageSiz
 let searchTimer     = null;
 let allClips        = []; // 現在ページの全データ
 let filteredClips   = []; // フィルタ後のデータ
+let currentTheme    = 'dark';
 
 
 // ── GAS 通信（secret 付き） ───────────────
@@ -404,19 +443,25 @@ async function gasFetch(params) {
 // ── 初期化 ────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('pageSizeSelect').value = String(limit);
+  const saved = localStorage.getItem('theme');
+  applyTheme(THEMES.includes(saved) ? saved : 'dark');
   loadFiles();
-  if (localStorage.getItem('theme') === 'light') {
-    document.body.classList.add('light');
-    document.querySelector('.theme-btn').textContent = '🌙 ダーク';
-  }
 });
 
 // ── テーマ切替 ────────────────────────────
+function applyTheme(theme) {
+  currentTheme = theme;
+  document.body.classList.remove('light', 'blue');
+  if (theme === 'light') document.body.classList.add('light');
+  if (theme === 'blue')  document.body.classList.add('blue');
+  const next = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
+  document.querySelector('.theme-btn').textContent = THEME_LABELS[next];
+}
+
 function toggleTheme() {
-  const isLight = document.body.classList.toggle('light');
-  const btn = document.querySelector('.theme-btn');
-  btn.textContent = isLight ? '🌙 ダーク' : '☀️ ライト';
-  localStorage.setItem('theme', isLight ? 'light' : 'dark');
+  const next = THEMES[(THEMES.indexOf(currentTheme) + 1) % THEMES.length];
+  applyTheme(next);
+  localStorage.setItem('theme', next);
 }
 
 // ── ファイル一覧取得 ──────────────────────
